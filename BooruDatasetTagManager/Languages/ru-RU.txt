@@ -735,6 +735,7 @@ TagWikiShowOriginal=Показать оригинал
 TagWikiExamples=Примеры
 TagsSortByCategory=Сортировка по категориям
 SettingMatchCharacterTags=Сопоставлять теги персонажей danbooru (цвета и имена)
+SettingCopyTagsWithTranslation=Включать перевод при копировании тегов (например tag (перевод))
 FolderBatchRenameMenu=Массовое переименование изображений...
 BatchRenameTitle=Массовое переименование
 BatchRenamePrefix=Префикс:

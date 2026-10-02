@@ -735,6 +735,7 @@ TagWikiShowOriginal=Mostrar original
 TagWikiExamples=Exemplos
 TagsSortByCategory=Ordenar por categoria
 SettingMatchCharacterTags=Corresponder tags de personagens do danbooru (cores e nomes)
+SettingCopyTagsWithTranslation=Incluir tradução ao copiar tags (ex: tag (tradução))
 FolderBatchRenameMenu=Renomear imagens em lote...
 BatchRenameTitle=Renomear em lote
 BatchRenamePrefix=Prefixo:

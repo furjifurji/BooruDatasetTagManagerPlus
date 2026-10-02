@@ -737,6 +737,7 @@ TagWikiShowOriginal=显示原文
 TagWikiExamples=示例图
 TagsSortByCategory=类别排序
 SettingMatchCharacterTags=匹配 Danbooru 角色标签（着色与译名）
+SettingCopyTagsWithTranslation=复制标签时包含翻译（如 tag (翻译)）
 FolderBatchRenameMenu=批量重命名图片...
 BatchRenameTitle=批量重命名
 BatchRenamePrefix=前缀:

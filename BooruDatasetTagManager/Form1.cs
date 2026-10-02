@@ -26,6 +26,7 @@ namespace BooruDatasetTagManager
             // Shift/Ctrl range-select on this grid (All Tags still worked).
             gridViewTags.MultiSelect = true;
             gridViewTags.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            gridViewTags.ClipboardCopyMode = DataGridViewClipboardCopyMode.Disable;
             previewPicBox = new PictureBox();
             previewPicBox.Name = "previewPicBox";
             allTagsFilter = new Form_filter();
@@ -2912,16 +2913,38 @@ namespace BooruDatasetTagManager
                 if (gridViewTags.CurrentCell != null && !gridViewTags.CurrentCell.IsInEditMode)
                 {
                     List<string> tagsToCopy = new List<string>();
+                    List<string> displayTexts = new List<string>();
+                    bool includeTranslation = Program.Settings.CopyTagsWithTranslation;
                     foreach (int rowIndex in GetSelectedImageTagRowIndexes(false))
                     {
                         string tag = GetImageTagRowText(rowIndex);
                         if (!string.IsNullOrEmpty(tag))
+                        {
                             tagsToCopy.Add(tag);
+                            if (includeTranslation)
+                            {
+                                string trans = null;
+                                if (gridViewTags.Columns.Contains("Translation")
+                                    && gridViewTags["Translation", rowIndex].Value is string t
+                                    && !string.IsNullOrWhiteSpace(t))
+                                {
+                                    trans = t.Trim();
+                                }
+                                if (!string.IsNullOrEmpty(trans))
+                                    displayTexts.Add($"{tag} ({trans})");
+                                else
+                                    displayTexts.Add(tag);
+                            }
+                            else
+                            {
+                                displayTexts.Add(tag);
+                            }
+                        }
                     }
                     if (tagsToCopy.Count == 0)
                         return;
                     DataObject d = new DataObject();
-                    d.SetText(string.Join("\r\n", tagsToCopy));
+                    d.SetText(string.Join("\r\n", displayTexts));
                     d.SetData("PartTagList", tagsToCopy);
                     try
                     {
