@@ -17,6 +17,41 @@ namespace BooruDatasetTagManager
 
     public static class TagSearchHelper
     {
+        public static bool IsMatch(
+            TagSearchItem item,
+            string query,
+            StringComparison comp,
+            bool wholeWord,
+            ISet<string> aliasTags)
+        {
+            string tag = item.Tag;
+            string translation = item.Translation;
+
+            if (string.IsNullOrEmpty(tag) && string.IsNullOrEmpty(translation))
+                return false;
+
+            if (wholeWord)
+            {
+                if (!string.IsNullOrEmpty(tag) && string.Equals(tag, query, comp))
+                    return true;
+                if (!string.IsNullOrEmpty(translation) && string.Equals(translation, query, comp))
+                    return true;
+                if (aliasTags != null && !string.IsNullOrEmpty(tag) && aliasTags.Contains(tag))
+                    return true;
+                return false;
+            }
+
+            // Substring / fuzzy match
+            if (!string.IsNullOrEmpty(tag) && tag.Contains(query, comp))
+                return true;
+            if (!string.IsNullOrEmpty(translation) && translation.Contains(query, comp))
+                return true;
+            if (aliasTags != null && !string.IsNullOrEmpty(tag) && aliasTags.Contains(tag))
+                return true;
+
+            return false;
+        }
+
         public static int FindBestMatch(
             IReadOnlyList<TagSearchItem> items,
             string query,
@@ -49,10 +84,6 @@ namespace BooruDatasetTagManager
 
             startIndex = ((startIndex % count) + count) % count;
 
-            int containsMatch = -1;
-            int translationMatch = -1;
-            int aliasMatch = -1;
-
             for (int offset = 0; offset < count; offset++)
             {
                 int i = forward
@@ -60,46 +91,13 @@ namespace BooruDatasetTagManager
                     : ((startIndex - offset) % count + count) % count;
 
                 TagSearchItem item = getItem(i);
-                string tag = item.Tag;
-                string translation = item.Translation;
-
-                if (string.IsNullOrEmpty(tag) && string.IsNullOrEmpty(translation))
-                    continue;
-
-                if (wholeWord)
+                if (IsMatch(item, query, comp, wholeWord, aliasTags))
                 {
-                    if (string.Equals(tag, query, comp))
-                        return i;
-                    if (!string.IsNullOrEmpty(translation) && string.Equals(translation, query, comp))
-                        return i;
-                    if (aliasTags != null && aliasTags.Contains(tag))
-                        return i;
-                    continue;
+                    return i;
                 }
-
-                // Exact match has highest priority
-                if (string.Equals(tag, query, comp))
-                    return i;
-
-                // Prefix match on tag
-                if (tag.StartsWith(query, comp))
-                    return i;
-
-                if (containsMatch == -1 && tag.Contains(query, comp))
-                    containsMatch = i;
-
-                if (translationMatch == -1 && !string.IsNullOrEmpty(translation) && translation.Contains(query, comp))
-                    translationMatch = i;
-
-                if (aliasMatch == -1 && aliasTags != null && aliasTags.Contains(tag))
-                    aliasMatch = i;
             }
 
-            if (containsMatch != -1)
-                return containsMatch;
-            if (translationMatch != -1)
-                return translationMatch;
-            return aliasMatch;
+            return -1;
         }
     }
 }

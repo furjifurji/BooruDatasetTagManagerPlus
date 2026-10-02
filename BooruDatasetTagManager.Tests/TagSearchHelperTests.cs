@@ -21,19 +21,47 @@ public sealed class TagSearchHelperTests
     }
 
     [Fact]
-    public void PrefixMatchBeatsSubstringMatch()
+    public void SequentialSearchVisitsCompoundAndExactMatchesInOrder()
     {
         var items = new List<TagSearchItem>
         {
-            new("dark blue eyes"),
-            new("blue hair"),
-            new("smile")
+            new("1girl"),
+            new("thighband pantyhose"),
+            new("pantyhose"),
+            new("torn pantyhose")
         };
 
-        // "blue" appears inside "dark blue eyes" (substring at index 0),
-        // but "blue hair" starts with "blue" (prefix at index 1). Prefix must win.
-        int match = TagSearchHelper.FindBestMatch(items, "blue", 0);
-        Assert.Equal(1, match);
+        // Searching for "pantyhose" finds first occurrence "thighband pantyhose" (index 1)
+        int first = TagSearchHelper.FindBestMatch(items, "pantyhose", 0);
+        Assert.Equal(1, first);
+
+        // Next forward search finds exact "pantyhose" (index 2)
+        int second = TagSearchHelper.FindBestMatch(items, "pantyhose", first + 1);
+        Assert.Equal(2, second);
+
+        // Next forward search finds "torn pantyhose" (index 3)
+        int third = TagSearchHelper.FindBestMatch(items, "pantyhose", second + 1);
+        Assert.Equal(3, third);
+
+        // Wrapping around finds index 1 again
+        int fourth = TagSearchHelper.FindBestMatch(items, "pantyhose", third + 1);
+        Assert.Equal(1, fourth);
+    }
+
+    [Fact]
+    public void WholeWordSearchMatchesExactTagOnly()
+    {
+        var items = new List<TagSearchItem>
+        {
+            new("1girl"),
+            new("thighband pantyhose"),
+            new("pantyhose"),
+            new("torn pantyhose")
+        };
+
+        // With wholeWord = true, compound tags are skipped and only exact "pantyhose" matches
+        int match = TagSearchHelper.FindBestMatch(items, "pantyhose", 0, wholeWord: true);
+        Assert.Equal(2, match);
     }
 
     [Fact]
