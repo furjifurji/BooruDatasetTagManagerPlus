@@ -1,4 +1,4 @@
-﻿using BooruDatasetTagManager.AiApi;
+using BooruDatasetTagManager.AiApi;
 using BooruDatasetTagManager.Properties;
 using System;
 using System.ComponentModel;
@@ -1656,6 +1656,11 @@ namespace BooruDatasetTagManager
                 allTagsSearchDefaultBackColor = toolStripTextBox1.BackColor;
                 if (toolStripImageTagsSearchBox != null)
                     imageTagsSearchDefaultBackColor = toolStripImageTagsSearchBox.BackColor;
+                if (formFindTag != null && !formFindTag.IsDisposed)
+                {
+                    Program.ColorManager.ChangeColorScheme(formFindTag, Program.ColorManager.SelectedScheme);
+                    Program.ColorManager.ChangeColorSchemeInConteiner(formFindTag.Controls, Program.ColorManager.SelectedScheme);
+                }
             }
         }
 
@@ -3549,7 +3554,15 @@ namespace BooruDatasetTagManager
 
         private void gridViewTags_KeyPress(object sender, KeyPressEventArgs e)
         {
-
+            if (char.IsControl(e.KeyChar))
+                return;
+            if (toolStripImageTagsSearchBox != null && toolStripImageTagsSearchBox.Visible)
+            {
+                toolStripImageTagsSearchBox.Focus();
+                toolStripImageTagsSearchBox.Text = e.KeyChar.ToString();
+                toolStripImageTagsSearchBox.SelectionStart = toolStripImageTagsSearchBox.TextLength;
+                e.Handled = true;
+            }
         }
 
         private async void gridViewDS_KeyDown(object sender, KeyEventArgs e)
@@ -4030,6 +4043,81 @@ namespace BooruDatasetTagManager
         private ToolStripTextBox toolStripImageTagsSearchBox;
         private ToolStripButton toolStripImageTagsSearchClear;
         private Color imageTagsSearchDefaultBackColor = SystemColors.Window;
+        private Form_FindTag formFindTag;
+
+        private void BtnTagFindInImage_Click(object sender, EventArgs e)
+        {
+            OpenFindTagDialog();
+        }
+
+        public void OpenFindTagDialog()
+        {
+            if (formFindTag == null || formFindTag.IsDisposed)
+            {
+                formFindTag = new Form_FindTag(this);
+            }
+            string initialQuery = null;
+            if (gridViewTags.CurrentCell != null)
+            {
+                int r = gridViewTags.CurrentCell.RowIndex;
+                initialQuery = GetImageTagRowText(r);
+            }
+            if (string.IsNullOrEmpty(initialQuery) && toolStripImageTagsSearchBox != null && !string.IsNullOrEmpty(toolStripImageTagsSearchBox.Text))
+            {
+                initialQuery = toolStripImageTagsSearchBox.Text;
+            }
+            formFindTag.ShowFind(initialQuery);
+        }
+
+        public void PerformImageTagSearch(string query, bool forward, bool matchCase, bool wholeWord, Form_FindTag requester = null)
+        {
+            if (Program.DataManager == null)
+            {
+                MessageBox.Show(I18n.GetText("TipDatasetNoLoad"));
+                return;
+            }
+            if (gridViewTags.RowCount == 0)
+            {
+                requester?.SetMatchResult(false, query);
+                SetStatus(string.Format(I18n.GetText("SearchNoMatch"), query));
+                return;
+            }
+
+            // Sync with header search box if present
+            if (toolStripImageTagsSearchBox != null && toolStripImageTagsSearchBox.Text != query)
+            {
+                toolStripImageTagsSearchBox.Text = query;
+            }
+
+            int count = gridViewTags.RowCount;
+            int currentRow = gridViewTags.CurrentCell != null ? gridViewTags.CurrentCell.RowIndex : -1;
+            int startIndex;
+            if (currentRow == -1)
+            {
+                startIndex = forward ? 0 : count - 1;
+            }
+            else
+            {
+                startIndex = forward ? (currentRow + 1) % count : ((currentRow - 1) % count + count) % count;
+            }
+
+            int matchIndex = FindImageTagRowBestMatch(query, startIndex, forward, matchCase, wholeWord);
+
+            if (matchIndex < 0 || matchIndex >= count)
+            {
+                requester?.SetMatchResult(false, query);
+                SetStatus(string.Format(I18n.GetText("SearchNoMatch"), query));
+                return;
+            }
+
+            requester?.SetMatchResult(true, query, matchIndex, count);
+            gridViewTags.CurrentCell = gridViewTags.Rows[matchIndex].Cells["ImageTags"];
+            if (matchIndex < gridViewTags.FirstDisplayedScrollingRowIndex
+                || matchIndex > gridViewTags.FirstDisplayedScrollingRowIndex + gridViewTags.DisplayedRowCount(false))
+            {
+                gridViewTags.FirstDisplayedScrollingRowIndex = matchIndex;
+            }
+        }
 
         /// <summary>
         /// Search box on the Image Tags toolbar, mirroring the All Tags search:
@@ -4084,6 +4172,10 @@ namespace BooruDatasetTagManager
             if (toolStripImageTagsSearchBox == null)
                 return;
             string query = toolStripImageTagsSearchBox.Text.Trim();
+            if (formFindTag != null && formFindTag.Visible && formFindTag.QueryText != query)
+            {
+                formFindTag.QueryText = query;
+            }
             if (query.Length == 0)
             {
                 toolStripImageTagsSearchBox.BackColor = imageTagsSearchDefaultBackColor;
@@ -4112,39 +4204,28 @@ namespace BooruDatasetTagManager
         /// tag text lives only on the first row of each group, so continuation
         /// rows fall back to the group tag text.
         /// </summary>
-        private int FindImageTagRowBestMatch(string query, int startIndex)
+        private int FindImageTagRowBestMatch(string query, int startIndex, bool forward = true, bool matchCase = false, bool wholeWord = false)
         {
             int count = gridViewTags.RowCount;
-            if (count == 0)
+            if (count == 0 || string.IsNullOrWhiteSpace(query))
                 return -1;
             var aliasTags = Program.ChineseTagLookup.FindEnglishTagsByChineseName(query, Program.Settings.Language);
-            startIndex = ((startIndex % count) + count) % count;
-            int containsMatch = -1;
-            int translationMatch = -1;
-            int aliasMatch = -1;
-            for (int offset = 0; offset < count; offset++)
-            {
-                int i = (startIndex + offset) % count;
-                string tag = GetImageTagRowText(i);
-                if (string.IsNullOrEmpty(tag))
-                    continue;
-                if (tag.StartsWith(query, StringComparison.OrdinalIgnoreCase))
-                    return i;
-                if (containsMatch == -1 && tag.Contains(query, StringComparison.OrdinalIgnoreCase))
-                    containsMatch = i;
-                if (translationMatch == -1
-                    && gridViewTags.Columns.Contains("Translation")
-                    && gridViewTags["Translation", i].Value is string translation
-                    && translation.Contains(query, StringComparison.OrdinalIgnoreCase))
-                    translationMatch = i;
-                if (aliasMatch == -1 && aliasTags.Contains(tag))
-                    aliasMatch = i;
-            }
-            if (containsMatch != -1)
-                return containsMatch;
-            if (translationMatch != -1)
-                return translationMatch;
-            return aliasMatch;
+            return TagSearchHelper.FindBestMatch(
+                count,
+                i =>
+                {
+                    string tag = GetImageTagRowText(i);
+                    string trans = null;
+                    if (gridViewTags.Columns.Contains("Translation") && gridViewTags["Translation", i].Value is string t)
+                        trans = t;
+                    return new TagSearchItem(tag, trans);
+                },
+                query,
+                startIndex,
+                forward,
+                matchCase,
+                wholeWord,
+                aliasTags);
         }
 
         private string GetImageTagRowText(int rowIndex)
@@ -4852,6 +4933,11 @@ namespace BooruDatasetTagManager
             BtnTagUp.Text = I18n.GetText("BtnTagUp");
             BtnTagDown.Text = I18n.GetText("BtnTagDown");
             BtnTagFindInAll.Text = I18n.GetText("BtnTagFindInAll");
+            BtnTagFindInImage.Text = I18n.GetText("BtnTagFindInImage");
+            if (formFindTag != null && !formFindTag.IsDisposed)
+            {
+                formFindTag.SwitchLanguage();
+            }
             toolStripSplitButton1.Text = I18n.GetText("BtnAutoGenerateTagsRoot");
             btnAutoGetTagsDefSet.Text = I18n.GetText("BtnAutoGetTagsDefSet");
             btnOpenAiAutoGetTagsDefSet.Text = I18n.GetText("BtnOpenAiAutoGetTagsDefSet");
@@ -5304,6 +5390,7 @@ namespace BooruDatasetTagManager
             cmds["BtnTagUp"] = delegate () { BtnTagUp.PerformClick(); };
             cmds["BtnTagDown"] = delegate () { BtnTagDown.PerformClick(); };
             cmds["BtnTagFindInAll"] = delegate () { BtnTagFindInAll.PerformClick(); };
+            cmds["BtnTagFindInImage"] = delegate () { BtnTagFindInImage.PerformClick(); };
             cmds["BtnTagAddToAll"] = delegate () { BtnTagAddToAll.PerformClick(); };
             cmds["BtnTagAddToSelected"] = delegate () { BtnTagAddToSelected.PerformClick(); };
             cmds["BtnTagAddToFiltered"] = delegate () { BtnTagAddToFiltered.PerformClick(); };
